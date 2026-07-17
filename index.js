@@ -10,13 +10,12 @@ app.listen(process.env.PORT || 3000, () => console.log('Web sunucusu başlatıld
 // ------------------------------------------
 
 const TOKEN = process.env.TOKEN;
-const GUILD_ID = process.env.GUILD_ID;
 
 // Yapılandırmayı (kanal ID'lerini) kaydedeceğimiz dosya
 const configPath = path.join(__dirname, 'config.json');
 
 // Dosyadan ayarları oku veya varsayılanları yükle
-let config = { active: false, totalChannelId: null, activeChannelId: null };
+let config = { active: false, guildId: null, totalChannelId: null, activeChannelId: null };
 if (fs.existsSync(configPath)) {
     try {
         config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
@@ -46,7 +45,7 @@ client.once('ready', async () => {
         new SlashCommandBuilder()
             .setName('uye-kanal-ac')
             .setDescription('Üye sayacı sistemini aktif eder.')
-            .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator), // Sadece yöneticiler görebilir
+            .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
         
         new SlashCommandBuilder()
             .setName('uye-kanal-kapat')
@@ -59,7 +58,7 @@ client.once('ready', async () => {
             .addChannelOption(option => 
                 option.setName('kanal')
                 .setDescription('Seçilecek ses kanalı')
-                .addChannelTypes(ChannelType.GuildVoice) // Sadece ses kanalları seçilebilsin
+                .addChannelTypes(ChannelType.GuildVoice)
                 .setRequired(true))
             .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
             
@@ -81,19 +80,17 @@ client.once('ready', async () => {
         console.error('Komut yükleme hatası:', error);
     }
 
-    // İlk çalıştığında güncellemeyi dene
     updateChannelNames();
-
-    // 10 dakikada bir otomatik güncelle
     setInterval(updateChannelNames, 10 * 60 * 1000); 
 });
 
-// Komutlar kullanıldığında tetiklenecek olay
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
     if (interaction.commandName === 'uye-kanal-ac') {
         config.active = true;
+        // Komutun kullanıldığı sunucunun ID'sini otomatik kaydet
+        config.guildId = interaction.guildId; 
         saveConfig();
         await interaction.reply({ content: '✅ Üye sayacı sistemi **açıldı**. Sayılar en geç 10 dakika içinde kanallara yansır.', ephemeral: true });
         updateChannelNames();
@@ -120,16 +117,16 @@ client.on('interactionCreate', async interaction => {
 });
 
 async function updateChannelNames() {
-    if (!config.active) return; // Sistem kapalıysa işlem yapma
+    if (!config.active) return;
     
     try {
-        const guildId = process.env.GUILD_ID || client.guilds.cache.first()?.id;
+        // Öncelik config'teki kayıtlı sunucu id'sinde, bulamazsa botun bulunduğu ilk sunucuyu çeker
+        const guildId = config.guildId || client.guilds.cache.first()?.id;
         if (!guildId) return;
 
         const guild = await client.guilds.fetch(guildId);
         if (!guild) return;
 
-        // Üyelerin çevrimiçi/çevrimdışı durumlarını sunucudan tazele
         await guild.members.fetch({ withPresences: true });
 
         // TOPLAM ÜYE
@@ -140,7 +137,6 @@ async function updateChannelNames() {
                 const newTotalName = `📊 Toplam Üye: ${totalCount}`;
                 if (totalChannel.name !== newTotalName) {
                     await totalChannel.edit({ name: newTotalName }).catch(console.error);
-                    console.log(`Güncellendi: ${newTotalName}`);
                 }
             }
         }
@@ -158,7 +154,6 @@ async function updateChannelNames() {
                 const newActiveName = `🟢 Aktif Üye: ${activeCount}`;
                 if (activeChannel.name !== newActiveName) {
                     await activeChannel.edit({ name: newActiveName }).catch(console.error);
-                    console.log(`Güncellendi: ${newActiveName}`);
                 }
             }
         }

@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, PermissionsBitField, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, PermissionsBitField, ChannelType, ActivityType } = require('discord.js');
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -39,6 +39,9 @@ const client = new Client({
 
 client.once('ready', async () => {
     console.log(`${client.user.tag} olarak giriş yapıldı!`);
+
+    // Botun "Oynuyor" / "Durum" kısmını ayarla
+    client.user.setActivity('A part of kivy.gg', { type: ActivityType.Custom });
 
     // --- SLASH KOMUTLARINI OLUŞTUR VE YÜKLE ---
     const commands = [

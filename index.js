@@ -1,72 +1,165 @@
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, PermissionsBitField, ChannelType } = require('discord.js');
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 
-// --- 7/24 AÇIK TUTMAK İÇİN WEB SUNUCUSU (Glitch vs. için) ---
+// --- 7/24 AÇIK TUTMAK İÇİN WEB SUNUCUSU ---
 const app = express();
-app.get('/', (req, res) => res.send('Bot başarıyla çalışıyor ve 7/24 uyanık!'));
+app.get('/', (req, res) => res.send('Bot başarıyla çalışıyor ve slash komutları aktif!'));
 app.listen(process.env.PORT || 3000, () => console.log('Web sunucusu başlatıldı.'));
-// -----------------------------------------------------------
+// ------------------------------------------
 
-// --- BOT AYARLARI ---
-const TOKEN = process.env.TOKEN || 'BURAYA_BOT_TOKENINI_YAZIN';
-const GUILD_ID = process.env.GUILD_ID || '1339630783887052850';
-const TOTAL_CHANNEL_ID = process.env.TOTAL_CHANNEL_ID || '1527795201081606144';
-const ACTIVE_CHANNEL_ID = process.env.ACTIVE_CHANNEL_ID || '1527795133632872652';
-// --------------------
+const TOKEN = process.env.TOKEN;
+const GUILD_ID = process.env.GUILD_ID;
+
+// Yapılandırmayı (kanal ID'lerini) kaydedeceğimiz dosya
+const configPath = path.join(__dirname, 'config.json');
+
+// Dosyadan ayarları oku veya varsayılanları yükle
+let config = { active: false, totalChannelId: null, activeChannelId: null };
+if (fs.existsSync(configPath)) {
+    try {
+        config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch (e) {
+        console.error("Config dosyası okunamadı, yenisi oluşturulacak.");
+    }
+}
+
+// Ayarları kaydetme fonksiyonu
+function saveConfig() {
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+}
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildPresences // Aktif/Çevrimiçi üyeleri görmek için ŞART!
+        GatewayIntentBits.GuildPresences
     ]
 });
 
-client.once('ready', () => {
+client.once('ready', async () => {
     console.log(`${client.user.tag} olarak giriş yapıldı!`);
 
-    // İlk çalıştığında hemen güncellesin
+    // --- SLASH KOMUTLARINI OLUŞTUR VE YÜKLE ---
+    const commands = [
+        new SlashCommandBuilder()
+            .setName('uye-kanal-ac')
+            .setDescription('Üye sayacı sistemini aktif eder.')
+            .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator), // Sadece yöneticiler görebilir
+        
+        new SlashCommandBuilder()
+            .setName('uye-kanal-kapat')
+            .setDescription('Üye sayacı sistemini kapatır.')
+            .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+        
+        new SlashCommandBuilder()
+            .setName('toplam-uye-kanal')
+            .setDescription('Toplam üye sayısının gösterileceği ses kanalını belirler.')
+            .addChannelOption(option => 
+                option.setName('kanal')
+                .setDescription('Seçilecek ses kanalı')
+                .addChannelTypes(ChannelType.GuildVoice) // Sadece ses kanalları seçilebilsin
+                .setRequired(true))
+            .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+            
+        new SlashCommandBuilder()
+            .setName('aktif-uye-kanal')
+            .setDescription('Aktif üye sayısının gösterileceği ses kanalını belirler.')
+            .addChannelOption(option => 
+                option.setName('kanal')
+                .setDescription('Seçilecek ses kanalı')
+                .addChannelTypes(ChannelType.GuildVoice)
+                .setRequired(true))
+            .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
+    ].map(cmd => cmd.toJSON());
+
+    try {
+        await client.application.commands.set(commands);
+        console.log('Slash komutları başarıyla Discorda yüklendi!');
+    } catch (error) {
+        console.error('Komut yükleme hatası:', error);
+    }
+
+    // İlk çalıştığında güncellemeyi dene
     updateChannelNames();
 
-    // Ardından her 10 dakikada bir güncellesin
+    // 10 dakikada bir otomatik güncelle
     setInterval(updateChannelNames, 10 * 60 * 1000); 
 });
 
-async function updateChannelNames() {
-    try {
-        const guild = await client.guilds.fetch(GUILD_ID);
-        if (!guild) {
-            console.log('Sunucu bulunamadı!');
-            return;
-        }
+// Komutlar kullanıldığında tetiklenecek olay
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
 
-        // Tüm üyeleri ve çevrimiçi/çevrimdışı durumlarını sunucudan çek (kesin doğru sayım için)
+    if (interaction.commandName === 'uye-kanal-ac') {
+        config.active = true;
+        saveConfig();
+        await interaction.reply({ content: '✅ Üye sayacı sistemi **açıldı**. Sayılar en geç 10 dakika içinde kanallara yansır.', ephemeral: true });
+        updateChannelNames();
+    } 
+    else if (interaction.commandName === 'uye-kanal-kapat') {
+        config.active = false;
+        saveConfig();
+        await interaction.reply({ content: '🛑 Üye sayacı sistemi **kapatıldı**. Kanalları manuel olarak silebilirsiniz.', ephemeral: true });
+    }
+    else if (interaction.commandName === 'toplam-uye-kanal') {
+        const channel = interaction.options.getChannel('kanal');
+        config.totalChannelId = channel.id;
+        saveConfig();
+        await interaction.reply({ content: `✅ Toplam üye kanalı ${channel} olarak ayarlandı.`, ephemeral: true });
+        if (config.active) updateChannelNames();
+    }
+    else if (interaction.commandName === 'aktif-uye-kanal') {
+        const channel = interaction.options.getChannel('kanal');
+        config.activeChannelId = channel.id;
+        saveConfig();
+        await interaction.reply({ content: `✅ Aktif üye kanalı ${channel} olarak ayarlandı.`, ephemeral: true });
+        if (config.active) updateChannelNames();
+    }
+});
+
+async function updateChannelNames() {
+    if (!config.active) return; // Sistem kapalıysa işlem yapma
+    
+    try {
+        const guildId = process.env.GUILD_ID || client.guilds.cache.first()?.id;
+        if (!guildId) return;
+
+        const guild = await client.guilds.fetch(guildId);
+        if (!guild) return;
+
+        // Üyelerin çevrimiçi/çevrimdışı durumlarını sunucudan tazele
         await guild.members.fetch({ withPresences: true });
 
-        // 1. TOPLAM ÜYE SAYISI GÜNCELLEME (Botlar da dahildir)
-        const totalChannel = await guild.channels.fetch(TOTAL_CHANNEL_ID);
-        if (totalChannel) {
-            const totalCount = guild.memberCount;
-            const newTotalName = `📊 Toplam Üye: ${totalCount}`;
-            if (totalChannel.name !== newTotalName) {
-                await totalChannel.edit({ name: newTotalName });
-                console.log(`Kanal güncellendi: ${newTotalName}`);
+        // TOPLAM ÜYE
+        if (config.totalChannelId) {
+            const totalChannel = await guild.channels.fetch(config.totalChannelId).catch(() => null);
+            if (totalChannel) {
+                const totalCount = guild.memberCount;
+                const newTotalName = `📊 Toplam Üye: ${totalCount}`;
+                if (totalChannel.name !== newTotalName) {
+                    await totalChannel.edit({ name: newTotalName }).catch(console.error);
+                    console.log(`Güncellendi: ${newTotalName}`);
+                }
             }
         }
 
-        // 2. AKTİF ÜYE SAYISI GÜNCELLEME (Sadece gerçek kullanıcılar, botlar hariç)
-        const activeChannel = await guild.channels.fetch(ACTIVE_CHANNEL_ID);
-        if (activeChannel) {
-            const activeCount = guild.members.cache.filter(member => 
-                !member.user.bot && // Botları dahil etme
-                member.presence &&  // Durumu olanları kontrol et
-                ['online', 'idle', 'dnd'].includes(member.presence.status) // Çevrimiçi, Boşta veya Rahatsız Etmeyin olanları say
-            ).size;
-            
-            const newActiveName = `🟢 Aktif Üye: ${activeCount}`;
-            if (activeChannel.name !== newActiveName) {
-                await activeChannel.edit({ name: newActiveName });
-                console.log(`Kanal güncellendi: ${newActiveName}`);
+        // AKTİF ÜYE
+        if (config.activeChannelId) {
+            const activeChannel = await guild.channels.fetch(config.activeChannelId).catch(() => null);
+            if (activeChannel) {
+                const activeCount = guild.members.cache.filter(member => 
+                    !member.user.bot && 
+                    member.presence && 
+                    ['online', 'idle', 'dnd'].includes(member.presence.status)
+                ).size;
+                
+                const newActiveName = `🟢 Aktif Üye: ${activeCount}`;
+                if (activeChannel.name !== newActiveName) {
+                    await activeChannel.edit({ name: newActiveName }).catch(console.error);
+                    console.log(`Güncellendi: ${newActiveName}`);
+                }
             }
         }
     } catch (error) {

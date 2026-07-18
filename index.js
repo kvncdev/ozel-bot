@@ -181,12 +181,15 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
             if (match) imageUrl = match[1];
         }
 
+        const siteLogoUrl = `https://www.google.com/s2/favicons?domain=${domainName}&sz=128`;
+
         const embed = new EmbedBuilder()
             .setTitle(`**${domainName}**`)
             .setDescription(`[**${titleText}**](${itemLink})`)
             .setColor(embedColor)
             .setFooter({ text: 'kivy', iconURL: client.user.displayAvatarURL() })
-            .setTimestamp(pubDate ? new Date(pubDate) : new Date());
+            .setTimestamp(pubDate ? new Date(pubDate) : new Date())
+            .setThumbnail(siteLogoUrl);
 
         if (imageUrl) {
             const proxyUrl = `${APP_URL}/news-image?url=${encodeURIComponent(imageUrl)}`;

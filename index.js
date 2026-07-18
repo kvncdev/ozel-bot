@@ -171,8 +171,8 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
         }
 
         const embed = new EmbedBuilder()
-            .setTitle(titleText)
-            .setURL(itemLink)
+            .setTitle(`*${domainName}*`)
+            .setDescription(`[**${titleText}**](${itemLink})`)
             .setColor('#2ECC71') // Kivy yeşil rengi
             .setFooter({ text: 'kivy', iconURL: client.user.displayAvatarURL() })
             .setTimestamp(pubDate ? new Date(pubDate) : new Date());

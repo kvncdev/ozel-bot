@@ -110,8 +110,11 @@ const siteColors = {
 };
 
 // Webhook ile gönderim yapacak yardımcı fonksiyon
-async function sendViaWebhook(channel, titleText, itemLink, feedUrl, pubDate) {
+async function sendViaWebhook(channel, titleText, item, feedUrl) {
     try {
+        const itemLink = item.link;
+        const pubDate = item.pubDate;
+
         const webhooks = await channel.fetchWebhooks();
         let webhook = webhooks.find(wh => wh.token);
 
@@ -138,12 +141,24 @@ async function sendViaWebhook(channel, titleText, itemLink, feedUrl, pubDate) {
         // Avatar bizim dinamik oluşturduğumuz yarı yarıya resim olacak
         const avatarURL = `${APP_URL}/avatar/${domainName}`;
 
+        let imageUrl = null;
+        if (item.enclosure && item.enclosure.url) {
+            imageUrl = item.enclosure.url;
+        } else if (item.content) {
+            const match = item.content.match(/<img[^>]+src="([^">]+)"/);
+            if (match) imageUrl = match[1];
+        }
+
         const embed = new EmbedBuilder()
             .setTitle(titleText)
             .setURL(itemLink)
             .setColor(embedColor)
             .setFooter({ text: 'kivy' })
             .setTimestamp(pubDate ? new Date(pubDate) : new Date());
+
+        if (imageUrl) {
+            embed.setImage(imageUrl);
+        }
 
         await webhook.send({
             username: username,
@@ -175,7 +190,7 @@ client.on('messageCreate', async message => {
                         } catch (e) {}
                     }
 
-                    await sendViaWebhook(message.channel, translatedTitle, item.link, feedUrl, item.pubDate);
+                    await sendViaWebhook(message.channel, translatedTitle, item, feedUrl);
                 }
             }
         } catch (error) {
@@ -211,7 +226,7 @@ async function checkAllNews() {
                         }
                     }
 
-                    await sendViaWebhook(channel, titleText, item.link, feedUrl, item.pubDate);
+                    await sendViaWebhook(channel, titleText, item, feedUrl);
                 }
             }
         }

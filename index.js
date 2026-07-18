@@ -69,6 +69,26 @@ app.get('/avatar/:domain', async (req, res) => {
     }
 });
 
+app.get('/small-logo', async (req, res) => {
+    const domain = req.query.domain;
+    if (!domain) return res.status(400).send('No domain');
+
+    try {
+        const logoUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+        const logoImg = await Jimp.read(logoUrl);
+
+        // Şeffaf, geniş bir tuval oluştur (Discord logoyu küçültsün diye etrafına boşluk ekliyoruz)
+        const paddedImg = new Jimp(256, 256, 0x00000000); 
+        paddedImg.composite(logoImg, 64, 64);
+
+        const buffer = await paddedImg.getBufferAsync(Jimp.MIME_PNG);
+        res.setHeader('Content-Type', 'image/png');
+        res.send(buffer);
+    } catch (e) {
+        res.redirect(`https://www.google.com/s2/favicons?domain=${domain}&sz=128`);
+    }
+});
+
 app.get('/news-image', async (req, res) => {
     const imageUrl = req.query.url;
     if (!imageUrl) return res.status(400).send('No URL');
@@ -181,7 +201,7 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
             if (match) imageUrl = match[1];
         }
 
-        const siteLogoUrl = `https://www.google.com/s2/favicons?domain=${domainName}&sz=128`;
+        const siteLogoUrl = `${APP_URL}/small-logo?domain=${domainName}`;
 
         const embed = new EmbedBuilder()
             .setTitle(`**${domainName}**`)

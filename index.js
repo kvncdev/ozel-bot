@@ -205,8 +205,9 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
         const siteLogoUrl = `${APP_URL}/small-logo?domain=${domainName}`;
 
         const embed = new EmbedBuilder()
-            .setTitle(`**${domainName}**`)
-            .setDescription(`[**${titleText}**](${itemLink})`)
+            .setAuthor({ name: domainName })
+            .setTitle(titleText)
+            .setURL(itemLink)
             .setColor(embedColor)
             .setFooter({ text: 'kivy', iconURL: client.user.displayAvatarURL() })
             .setTimestamp(pubDate ? new Date(pubDate) : new Date())

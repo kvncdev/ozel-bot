@@ -58,7 +58,7 @@ client.on('messageCreate', async message => {
             
             if (feed && feed.items.length > 0) {
                 const item = feed.items[0]; // En yeni haber her zaman 0. sıradadır
-                await message.channel.send(`✅ Test Başarılı! Sitedeki en son haber şu anda bu:\n📰 **${item.title}**\n${item.link}`);
+                await message.channel.send(`Yeni gelişme: ${item.link}`);
             } else {
                 await message.channel.send("❌ Haber bulunamadı veya bağlantı kurulamadı.");
             }
@@ -81,7 +81,7 @@ async function checkCryptoNews() {
             const itemDate = new Date(item.pubDate).getTime();
             if (itemDate > lastNewsDate) {
                 lastNewsDate = itemDate; 
-                await channel.send(`📰 **${item.title}**\n${item.link}`);
+                await channel.send(`Yeni gelişme: ${item.link}`);
             }
         }
     } catch (error) {

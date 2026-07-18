@@ -119,15 +119,6 @@ client.once('ready', async () => {
     updateChannelNames();
     setInterval(updateChannelNames, 10 * 60 * 1000); 
     setInterval(checkAllNews, 5 * 60 * 1000); 
-
-    try {
-        const newsChannel = await client.channels.fetch(NEWS_CHANNEL_ID).catch(() => null);
-        if (newsChannel) {
-            await newsChannel.send('200 OK');
-        }
-    } catch (e) {
-        console.error("Test mesajı atılamadı:", e);
-    }
 });
 
 const siteColors = {
@@ -209,34 +200,6 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
         await channel.send(`🗞️ **${titleText}** - ${new URL(itemLink).hostname.replace(/^www\./, '')}\n${itemLink}`);
     }
 }
-
-client.on('messageCreate', async message => {
-    if (message.author.bot) return;
-
-    if (message.content === '!test') {
-        try {
-            await message.channel.send("200 OK (Test Başlatıldı: Tüm kaynaklar taranıyor...)");
-            
-            for (const feedUrl of newsSources) {
-                const feed = await parser.parseURL(feedUrl).catch(()=>null);
-                if (feed && feed.items.length > 0) {
-                    const item = feed.items[0]; 
-                    let translatedTitle = item.title;
-                    
-                    if (!feedUrl.includes('bbci.co.uk')) {
-                        try {
-                            translatedTitle = await translate(item.title, {to: 'tr'});
-                        } catch (e) {}
-                    }
-
-                    await sendViaWebhook(message.channel, translatedTitle, item, feedUrl);
-                }
-            }
-        } catch (error) {
-            console.error('Test komutunda hata:', error.message);
-        }
-    }
-});
 
 async function checkAllNews() {
     try {

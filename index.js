@@ -2,6 +2,8 @@ const { Client, GatewayIntentBits, ActivityType, EmbedBuilder, ActionRowBuilder,
 const express = require('express');
 const Parser = require('rss-parser'); 
 const translate = require('translate-google'); 
+const os = require('os');
+const { execSync } = require('child_process');
 
 // --- BOT AYARLARI ---
 const TOKEN = process.env.TOKEN;
@@ -142,6 +144,65 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
 
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
+
+    if (message.content.startsWith('k!stat')) {
+        if (message.author.id !== '1175381612922405025') {
+            return message.reply({ content: "Bu komutu kullanma yetkiniz yok.", ephemeral: true });
+        }
+
+        try {
+            const machineName = os.hostname();
+            const osType = `${os.type()} ${os.release()}`;
+            const cpuInfo = `${os.cpus().length} Cores - ${os.cpus()[0].model}`;
+            const sysUptimeSecs = os.uptime();
+            const sysUptimeStr = `${Math.floor(sysUptimeSecs / 86400)}d ${Math.floor((sysUptimeSecs % 86400) / 3600)}h ${Math.floor((sysUptimeSecs % 3600) / 60)}m`;
+            const filePath = process.cwd();
+            const nodeVersion = process.version;
+
+            const totalMem = (os.totalmem() / 1024 / 1024 / 1024).toFixed(2);
+            const freeMem = (os.freemem() / 1024 / 1024 / 1024).toFixed(2);
+            const usedMem = (totalMem - freeMem).toFixed(2);
+
+            let storageStr = "Unknown";
+            try {
+                const dfOutput = execSync('df -h /').toString().split('\n')[1].trim().split(/\s+/);
+                storageStr = `${dfOutput[2]} / ${dfOutput[1]} (${dfOutput[4]})`;
+            } catch (e) {}
+
+            let pm2Str = "";
+            try {
+                const pm2List = JSON.parse(execSync('pm2 jlist').toString());
+                for (const proc of pm2List) {
+                    const status = proc.pm2_env.status.toUpperCase();
+                    const cpu = proc.monit ? proc.monit.cpu : 0;
+                    const mem = proc.monit ? (proc.monit.memory / 1024 / 1024).toFixed(1) : 0;
+                    const uptime = proc.pm2_env.pm_uptime ? Date.now() - proc.pm2_env.pm_uptime : 0;
+                    const upHrs = Math.floor(uptime / 3600000);
+                    const upMins = Math.floor((uptime % 3600000) / 60000);
+                    const restarts = proc.pm2_env.restart_time;
+
+                    pm2Str += `  [${proc.name}]\n`;
+                    pm2Str += `    Status    : ${status}\n`;
+                    pm2Str += `    CPU Usage : ${cpu}%\n`;
+                    pm2Str += `    Memory    : ${mem} MB\n`;
+                    pm2Str += `    Uptime    : ${upHrs}h ${upMins}m\n`;
+                    pm2Str += `    Restarts  : ${restarts}\n`;
+                }
+            } catch (e) {
+                pm2Str = "  PM2 bilgisi okunamadı";
+            }
+
+            const ping = client.ws.ping;
+
+            const finalString = `\`\`\`yaml\n--- SYSTEM STATISTICS ---\n\nHost Information:\n  Machine Name  : ${machineName}\n  OS            : ${osType}\n  CPU           : ${cpuInfo}\n  System Uptime : ${sysUptimeStr}\n  File Path     : ${filePath}\n  Node Version  : ${nodeVersion}\n\nResource Usage:\n  RAM Usage     : ${usedMem} GB / ${totalMem} GB\n  Storage       : ${storageStr}\n\nNetwork & Discord:\n  Gateway Ping  : ${ping}ms\n  Shard Info    : [1/1]\n\nPM2 Processes:\n${pm2Str}\`\`\``;
+
+            await message.reply(finalString);
+        } catch (error) {
+            console.error(error);
+            message.reply("İstatistikler alınırken hata oluştu.");
+        }
+        return;
+    }
 
     if (message.content.startsWith('k!sil')) {
         if (!message.member.permissions.has('ManageMessages')) {

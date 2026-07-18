@@ -64,19 +64,22 @@ client.on('messageCreate', async message => {
 
     if (message.content === '!test') {
         try {
-            await message.reply("Haberler kontrol ediliyor ve çevriliyor, lütfen bekle...");
-            const feed = await parser.parseURL('https://cointelegraph.com/rss').catch(()=>null);
+            await message.channel.send("200 OK (Test Başlatıldı: Tüm kaynaklar taranıyor...)");
             
-            if (feed && feed.items.length > 0) {
-                const item = feed.items[0]; 
-                let translatedTitle = item.title;
-                try {
-                    translatedTitle = await translate(item.title, {to: 'tr'});
-                } catch (e) {}
+            for (const feedUrl of newsSources) {
+                const feed = await parser.parseURL(feedUrl).catch(()=>null);
+                if (feed && feed.items.length > 0) {
+                    const item = feed.items[0]; 
+                    let translatedTitle = item.title;
+                    
+                    if (!feedUrl.includes('bbci.co.uk')) {
+                        try {
+                            translatedTitle = await translate(item.title, {to: 'tr'});
+                        } catch (e) {}
+                    }
 
-                await message.channel.send(`----\n📰 ${translatedTitle} - ${item.link}`);
-            } else {
-                await message.channel.send("❌ Haber bulunamadı.");
+                    await message.channel.send(`----\n🗞️ ${translatedTitle} - ${item.link}`);
+                }
             }
         } catch (error) {
             console.error('Test komutunda hata:', error.message);
@@ -113,7 +116,7 @@ async function checkAllNews() {
                         }
                     }
 
-                    await channel.send(`----\n📰 ${titleText} - ${item.link}`);
+                    await channel.send(`----\n🗞️ ${titleText} - ${item.link}`);
                 }
             }
         }

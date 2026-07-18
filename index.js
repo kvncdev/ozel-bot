@@ -68,6 +68,23 @@ app.get('/avatar/:domain', async (req, res) => {
     }
 });
 
+app.get('/news-image', async (req, res) => {
+    const imageUrl = req.query.url;
+    if (!imageUrl) return res.status(400).send('No URL');
+
+    try {
+        const img = await Jimp.read(imageUrl);
+        img.cover(800, 450); // Tüm resimleri 800x450 ebatlarına zorla (cover)
+        const buffer = await img.getBufferAsync(Jimp.MIME_PNG);
+        
+        res.setHeader('Content-Type', 'image/png');
+        res.send(buffer);
+    } catch (e) {
+        console.error("Haber resmi işlenemedi:", e.message);
+        res.redirect(imageUrl); // Hata olursa orijinal resmi geri gönder
+    }
+});
+
 app.listen(process.env.PORT || 3000, () => console.log('Web sunucusu başlatıldı.'));
 
 
@@ -160,7 +177,8 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
             .setTimestamp(pubDate ? new Date(pubDate) : new Date());
 
         if (imageUrl) {
-            embed.setImage(imageUrl);
+            const proxyUrl = `${APP_URL}/news-image?url=${encodeURIComponent(imageUrl)}`;
+            embed.setImage(proxyUrl);
         }
 
         await webhook.send({

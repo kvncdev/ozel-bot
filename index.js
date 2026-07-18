@@ -1,3 +1,10 @@
+/*
+  _  ___       
+ | |/ (_)_   __
+ | ' /| \ \ / /
+ | . \| |\ V / 
+ |_|\_\_| \_/  
+*/
 const { Client, GatewayIntentBits, ActivityType, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const express = require('express');
 const Parser = require('rss-parser'); 
@@ -54,6 +61,13 @@ newsSources.forEach(url => {
 });
 
 client.once('ready', async () => {
+    console.log(`
+  _  ___       
+ | |/ (_)_   __
+ | ' /| \\ \\ / /
+ | . \\| |\\ V / 
+ |_|\\_\\_| \\_/  
+    `);
     console.log(`${client.user.tag} olarak giriş yapıldı!`);
     client.user.setActivity('A part of kivy.gg', { type: ActivityType.Custom });
 

@@ -51,7 +51,7 @@ client.once('ready', async () => {
     try {
         const newsChannel = await client.channels.fetch(NEWS_CHANNEL_ID).catch(() => null);
         if (newsChannel) {
-            await newsChannel.send('🚀 bitcoin uçtu!! (Sistem Testi)');
+            await newsChannel.send('✅ 200 OK (Sistem Aktif)');
         }
     } catch (e) {
         console.error("Test mesajı atılamadı:", e);

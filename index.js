@@ -140,6 +140,55 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
     }
 }
 
+client.on('messageCreate', async message => {
+    if (message.author.bot) return;
+
+    if (message.content.startsWith('k!sil')) {
+        if (!message.member.permissions.has('ManageMessages')) {
+            return message.reply("Bu komutu kullanmak için 'Mesajları Yönet' yetkisine sahip olmalısın!");
+        }
+
+        const args = message.content.split(' ');
+        const amount = parseInt(args[1]);
+
+        if (isNaN(amount) || amount < 1 || amount > 100) {
+            return message.reply("Lütfen silmek için 1 ile 100 arasında bir sayı belirtin (Örn: `k!sil 50`).");
+        }
+
+        const confirmMsg = await message.reply(`⚠️ **${amount}** adet mesajı silmek istediğinizden emin misiniz?`);
+        await confirmMsg.react('✅');
+        await confirmMsg.react('❌');
+
+        const filter = (reaction, user) => {
+            return ['✅', '❌'].includes(reaction.emoji.name) && user.id === message.author.id;
+        };
+
+        try {
+            const collected = await confirmMsg.awaitReactions({ filter, max: 1, time: 15000, errors: ['time'] });
+            const reaction = collected.first();
+
+            if (reaction.emoji.name === '✅') {
+                await confirmMsg.delete().catch(() => null);
+                await message.delete().catch(() => null);
+
+                const deleted = await message.channel.bulkDelete(amount, true);
+                
+                const successMsg = await message.channel.send(`✅ **${deleted.size}** mesaj başarıyla silindi!`);
+                setTimeout(() => successMsg.delete().catch(() => null), 5000);
+
+            } else {
+                await confirmMsg.delete().catch(() => null);
+                const cancelMsg = await message.channel.send("❌ İşlem iptal edildi.");
+                setTimeout(() => cancelMsg.delete().catch(() => null), 5000);
+            }
+        } catch (e) {
+            await confirmMsg.delete().catch(() => null);
+            const timeoutMsg = await message.channel.send("⏳ 15 saniye içinde cevap verilmediği için işlem iptal edildi.");
+            setTimeout(() => timeoutMsg.delete().catch(() => null), 5000);
+        }
+    }
+});
+
 async function checkAllNews() {
     try {
         const channel = await client.channels.fetch(NEWS_CHANNEL_ID).catch(() => null);

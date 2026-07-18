@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
 const express = require('express');
 const Parser = require('rss-parser'); 
+const translate = require('translate-google'); // Çeviri eklentisi
 
 const app = express();
 app.get('/', (req, res) => res.send('Bot başarıyla çalışıyor ve 7/24 uyanık!'));
@@ -13,7 +14,6 @@ const TOTAL_CHANNEL_ID = process.env.TOTAL_CHANNEL_ID;
 const ACTIVE_CHANNEL_ID = process.env.ACTIVE_CHANNEL_ID;
 const NEWS_CHANNEL_ID = process.env.NEWS_CHANNEL_ID || '1339630784738234442';
 
-// Intent'lere Mesaj okuma izni eklendi (!test komutu için)
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -25,18 +25,29 @@ const client = new Client({
 });
 
 const parser = new Parser();
-let lastNewsDate = Date.now(); 
+
+// Kaynaklarımız
+const newsSources = [
+    'https://cointelegraph.com/rss',
+    'https://babypips.com/feed.rss',
+    'https://finance.yahoo.com/news/rss',
+    'https://feeds.bbci.co.uk/turkce/rss.xml'
+];
+
+// Her kaynak için ayrı ayrı son haber tarihini tutalım ki haber atlamasın
+let lastNewsDates = {};
+newsSources.forEach(url => {
+    lastNewsDates[url] = Date.now();
+});
 
 client.once('ready', async () => {
     console.log(`${client.user.tag} olarak giriş yapıldı!`);
-
     client.user.setActivity('A part of kivy.gg', { type: ActivityType.Custom });
 
     updateChannelNames();
     setInterval(updateChannelNames, 10 * 60 * 1000); 
-    setInterval(checkCryptoNews, 5 * 60 * 1000);
+    setInterval(checkAllNews, 5 * 60 * 1000); // 5 Dakikada bir tüm kaynakları tara
 
-    // Bota kanal izni verilmişse açılışta test mesajı atsın
     try {
         const newsChannel = await client.channels.fetch(NEWS_CHANNEL_ID).catch(() => null);
         if (newsChannel) {
@@ -53,39 +64,61 @@ client.on('messageCreate', async message => {
 
     if (message.content === '!test') {
         try {
-            await message.reply("Haberler kontrol ediliyor, lütfen bekle...");
-            const feed = await parser.parseURL('https://cointelegraph.com/rss');
+            await message.reply("Haberler kontrol ediliyor ve çevriliyor, lütfen bekle...");
+            const feed = await parser.parseURL('https://cointelegraph.com/rss').catch(()=>null);
             
             if (feed && feed.items.length > 0) {
-                const item = feed.items[0]; // En yeni haber her zaman 0. sıradadır
-                await message.channel.send(`Yeni gelişme: ${item.link}`);
+                const item = feed.items[0]; 
+                let translatedTitle = item.title;
+                try {
+                    translatedTitle = await translate(item.title, {to: 'tr'});
+                } catch (e) {}
+
+                await message.channel.send(`----\n📰 ${translatedTitle} - ${item.link}`);
             } else {
-                await message.channel.send("❌ Haber bulunamadı veya bağlantı kurulamadı.");
+                await message.channel.send("❌ Haber bulunamadı.");
             }
         } catch (error) {
             console.error('Test komutunda hata:', error.message);
-            await message.channel.send("❌ Hata oluştu: " + error.message);
         }
     }
 });
 
-async function checkCryptoNews() {
+async function checkAllNews() {
     try {
         const channel = await client.channels.fetch(NEWS_CHANNEL_ID).catch(() => null);
         if (!channel) return;
 
-        const feed = await parser.parseURL('https://cointelegraph.com/rss');
-        const items = feed.items.reverse();
+        for (const feedUrl of newsSources) {
+            const feed = await parser.parseURL(feedUrl).catch(() => null);
+            if (!feed) continue;
+            
+            const items = feed.items.reverse();
 
-        for (const item of items) {
-            const itemDate = new Date(item.pubDate).getTime();
-            if (itemDate > lastNewsDate) {
-                lastNewsDate = itemDate; 
-                await channel.send(`Yeni gelişme: ${item.link}`);
+            for (const item of items) {
+                const itemDate = new Date(item.pubDate).getTime();
+                
+                // O sitenin son çekilen haberinden daha yeniyse
+                if (itemDate > lastNewsDates[feedUrl]) {
+                    lastNewsDates[feedUrl] = itemDate; 
+                    
+                    let titleText = item.title;
+                    
+                    // Eğer haber BBC Türkçe'den değilse İngilizceden Türkçeye çevir
+                    if (!feedUrl.includes('bbci.co.uk')) {
+                        try {
+                            titleText = await translate(item.title, {to: 'tr'});
+                        } catch (e) {
+                            console.error("Çeviri hatası:", e);
+                        }
+                    }
+
+                    await channel.send(`----\n📰 ${titleText} - ${item.link}`);
+                }
             }
         }
     } catch (error) {
-        console.error('Haber çekilirken hata oluştu:', error.message);
+        console.error('Haberler çekilirken hata oluştu:', error.message);
     }
 }
 

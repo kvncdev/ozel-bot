@@ -156,11 +156,11 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
             .setTitle(titleText)
             .setURL(itemLink)
             .setColor('#2ECC71') // Kivy yeşil rengi
-            .setFooter({ text: 'kivy' })
+            .setFooter({ text: 'kivy', iconURL: client.user.displayAvatarURL() })
             .setTimestamp(pubDate ? new Date(pubDate) : new Date());
 
         if (imageUrl) {
-            embed.setThumbnail(imageUrl);
+            embed.setImage(imageUrl);
         }
 
         await webhook.send({

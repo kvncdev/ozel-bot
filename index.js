@@ -2,7 +2,6 @@ const { Client, GatewayIntentBits, ActivityType, EmbedBuilder } = require('disco
 const express = require('express');
 const Parser = require('rss-parser'); 
 const translate = require('translate-google'); 
-const Jimp = require('jimp'); 
 
 // --- BOT AYARLARI ---
 const TOKEN = process.env.TOKEN;
@@ -25,68 +24,8 @@ const client = new Client({
 
 // --- YARI YARIYA AVATAR SİSTEMİ (Express Web Sunucusu) ---
 const app = express();
-const avatarCache = {}; 
 
 app.get('/', (req, res) => res.send('Bot başarıyla çalışıyor ve 7/24 uyanık!'));
-
-app.get('/avatar/:domain', async (req, res) => {
-    const domain = req.params.domain;
-    
-    // Daha önce oluşturduysak hafızadan ver (Sistemi yormamak için)
-    if (avatarCache[domain]) {
-        res.setHeader('Content-Type', 'image/png');
-        return res.send(avatarCache[domain]);
-    }
-
-    try {
-        const botAvatarUrl = client.user.displayAvatarURL({ extension: 'png', size: 128 });
-        const siteLogoUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-
-        const botImg = await Jimp.read(botAvatarUrl);
-        const siteImg = await Jimp.read(siteLogoUrl);
-
-        botImg.resize(128, 128);
-        siteImg.resize(128, 128);
-
-        const outImg = new Jimp(128, 128);
-        
-        // Sol yarıya botun resmini koy
-        botImg.crop(0, 0, 64, 128);
-        outImg.composite(botImg, 0, 0);
-
-        // Sağ yarıya sitenin logosunu koy
-        siteImg.crop(64, 0, 64, 128);
-        outImg.composite(siteImg, 64, 0);
-
-        const buffer = await outImg.getBufferAsync(Jimp.MIME_PNG);
-        avatarCache[domain] = buffer; // Hafızaya kaydet
-
-        res.setHeader('Content-Type', 'image/png');
-        res.send(buffer);
-    } catch (e) {
-        console.error("Avatar oluşturulamadı:", e.message);
-        res.status(500).send('Error');
-    }
-});
-
-// /small-logo endpointi kaldırıldı çünkü logoyu Author kısmına (en üste) taşıyoruz.
-
-app.get('/news-image', async (req, res) => {
-    const imageUrl = req.query.url;
-    if (!imageUrl) return res.status(400).send('No URL');
-
-    try {
-        const img = await Jimp.read(imageUrl);
-        img.cover(800, 450); // Tüm resimleri 800x450 ebatlarına zorla (cover)
-        const buffer = await img.getBufferAsync(Jimp.MIME_PNG);
-        
-        res.setHeader('Content-Type', 'image/png');
-        res.send(buffer);
-    } catch (e) {
-        console.error("Haber resmi işlenemedi:", e.message);
-        res.redirect(imageUrl); // Hata olursa orijinal resmi geri gönder
-    }
-});
 
 app.listen(process.env.PORT || 3000, () => console.log('Web sunucusu başlatıldı.'));
 
@@ -160,7 +99,7 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
         // İsim "Kivy" olmadan direkt site adı olacak
         const username = siteName;
         // Avatar bizim dinamik oluşturduğumuz yarı yarıya resim olacak
-        const avatarURL = `${APP_URL}/avatar/${domainName}`;
+        const avatarURL = `https://www.google.com/s2/favicons?domain=${domainName}&sz=128`;
 
         let imageUrl = null;
         if (item.enclosure && item.enclosure.url) {
@@ -185,7 +124,7 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
             .setTimestamp(pubDate ? new Date(pubDate) : new Date());
 
         if (imageUrl) {
-            const proxyUrl = `${APP_URL}/news-image?url=${encodeURIComponent(imageUrl)}`;
+            const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(imageUrl)}&w=800&h=450&fit=cover`;
             embed.setImage(proxyUrl);
         }
 

@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, ActivityType, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, ActivityType, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const express = require('express');
 const Parser = require('rss-parser'); 
 const translate = require('translate-google'); 
@@ -155,37 +155,63 @@ client.on('messageCreate', async message => {
             return message.reply("Lütfen silmek için 1 ile 100 arasında bir sayı belirtin (Örn: `k!sil 50`).");
         }
 
-        const confirmMsg = await message.reply(`⚠️ **${amount}** adet mesajı silmek istediğinizden emin misiniz?`);
-        await confirmMsg.react('✅');
-        await confirmMsg.react('❌');
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('confirm_delete')
+                    .setLabel('Evet, Sil')
+                    .setStyle(ButtonStyle.Danger),
+                new ButtonBuilder()
+                    .setCustomId('cancel_delete')
+                    .setLabel('İptal')
+                    .setStyle(ButtonStyle.Secondary)
+            );
 
-        const filter = (reaction, user) => {
-            return ['✅', '❌'].includes(reaction.emoji.name) && user.id === message.author.id;
+        const confirmMsg = await message.reply({ 
+            content: `⚠️ **${amount}** adet mesajı silmek istediğinizden emin misiniz?`, 
+            components: [row] 
+        });
+
+        const filter = i => {
+            if (i.user.id !== message.author.id) {
+                i.reply({ content: "Bu butonları sadece komutu yazan kişi kullanabilir!", ephemeral: true });
+                return false;
+            }
+            return true;
         };
 
-        try {
-            const collected = await confirmMsg.awaitReactions({ filter, max: 1, time: 15000, errors: ['time'] });
-            const reaction = collected.first();
+        const collector = confirmMsg.createMessageComponentCollector({ filter, time: 15000, max: 1 });
 
-            if (reaction.emoji.name === '✅') {
+        collector.on('collect', async i => {
+            if (i.customId === 'confirm_delete') {
+                await i.deferUpdate().catch(() => null);
                 await confirmMsg.delete().catch(() => null);
                 await message.delete().catch(() => null);
 
-                const deleted = await message.channel.bulkDelete(amount, true);
-                
-                const successMsg = await message.channel.send(`✅ **${deleted.size}** mesaj başarıyla silindi!`);
-                setTimeout(() => successMsg.delete().catch(() => null), 5000);
-
-            } else {
+                try {
+                    const deleted = await message.channel.bulkDelete(amount, true);
+                    const successMsg = await message.channel.send(`✅ **${deleted.size}** mesaj başarıyla silindi!`);
+                    setTimeout(() => successMsg.delete().catch(() => null), 5000);
+                } catch (e) {
+                    const errorMsg = await message.channel.send("❌ Mesajlar silinirken hata oluştu (Discord kuralları gereği 14 günden eski mesajlar toplu silinemez).");
+                    setTimeout(() => errorMsg.delete().catch(() => null), 5000);
+                }
+            } else if (i.customId === 'cancel_delete') {
+                await i.deferUpdate().catch(() => null);
                 await confirmMsg.delete().catch(() => null);
                 const cancelMsg = await message.channel.send("❌ İşlem iptal edildi.");
                 setTimeout(() => cancelMsg.delete().catch(() => null), 5000);
             }
-        } catch (e) {
-            await confirmMsg.delete().catch(() => null);
-            const timeoutMsg = await message.channel.send("⏳ 15 saniye içinde cevap verilmediği için işlem iptal edildi.");
-            setTimeout(() => timeoutMsg.delete().catch(() => null), 5000);
-        }
+        });
+
+        collector.on('end', collected => {
+            if (collected.size === 0) {
+                confirmMsg.delete().catch(() => null);
+                message.channel.send("⏳ 15 saniye içinde cevap verilmediği için işlem iptal edildi.").then(m => {
+                    setTimeout(() => m.delete().catch(() => null), 5000);
+                });
+            }
+        });
     }
 });
 

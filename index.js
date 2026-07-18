@@ -71,7 +71,14 @@ app.get('/avatar/:domain', async (req, res) => {
 app.listen(process.env.PORT || 3000, () => console.log('Web sunucusu başlatıldı.'));
 
 
-const parser = new Parser();
+const parser = new Parser({
+    customFields: {
+        item: [
+            ['media:content', 'mediaContent'],
+            ['media:thumbnail', 'mediaThumbnail']
+        ]
+    }
+});
 
 const newsSources = [
     'https://cointelegraph.com/rss',
@@ -103,12 +110,6 @@ client.once('ready', async () => {
     }
 });
 
-const siteColors = {
-    'cointelegraph.com': '#FABF2C',
-    'babypips.com': '#1D70B8',
-    'finance.yahoo.com': '#6001D2'
-};
-
 // Webhook ile gönderim yapacak yardımcı fonksiyon
 async function sendViaWebhook(channel, titleText, item, feedUrl) {
     try {
@@ -130,10 +131,8 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
         let siteName = domainName.split('.')[0];
         siteName = siteName.charAt(0).toUpperCase() + siteName.slice(1);
         
-        let embedColor = siteColors[domainName] || '#FFFFFF';
         if (feedUrl.includes('bbci')) {
             siteName = 'BBC Türkçe';
-            embedColor = '#B80000';
         }
 
         // İsim "Kivy" olmadan direkt site adı olacak
@@ -144,6 +143,10 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
         let imageUrl = null;
         if (item.enclosure && item.enclosure.url) {
             imageUrl = item.enclosure.url;
+        } else if (item.mediaContent && item.mediaContent.$ && item.mediaContent.$.url) {
+            imageUrl = item.mediaContent.$.url;
+        } else if (item.mediaThumbnail && item.mediaThumbnail.$ && item.mediaThumbnail.$.url) {
+            imageUrl = item.mediaThumbnail.$.url;
         } else if (item.content) {
             const match = item.content.match(/<img[^>]+src="([^">]+)"/);
             if (match) imageUrl = match[1];
@@ -152,12 +155,12 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
         const embed = new EmbedBuilder()
             .setTitle(titleText)
             .setURL(itemLink)
-            .setColor(embedColor)
+            .setColor('#2ECC71') // Kivy yeşil rengi
             .setFooter({ text: 'kivy' })
             .setTimestamp(pubDate ? new Date(pubDate) : new Date());
 
         if (imageUrl) {
-            embed.setImage(imageUrl);
+            embed.setThumbnail(imageUrl);
         }
 
         await webhook.send({

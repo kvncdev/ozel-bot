@@ -79,7 +79,8 @@ app.get('/small-logo', async (req, res) => {
 
         // Şeffaf, geniş bir tuval oluştur (Discord logoyu küçültsün diye etrafına boşluk ekliyoruz)
         const paddedImg = new Jimp(256, 256, 0x00000000); 
-        paddedImg.composite(logoImg, 64, 64);
+        // Logoyu sağ üst köşeye daya (X: 128, Y: 0)
+        paddedImg.composite(logoImg, 128, 0);
 
         const buffer = await paddedImg.getBufferAsync(Jimp.MIME_PNG);
         res.setHeader('Content-Type', 'image/png');

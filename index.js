@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
+const { Client, GatewayIntentBits, ActivityType, EmbedBuilder } = require('discord.js');
 const express = require('express');
 const Parser = require('rss-parser'); 
 const translate = require('translate-google'); 
@@ -103,8 +103,14 @@ client.once('ready', async () => {
     }
 });
 
+const siteColors = {
+    'cointelegraph.com': '#FABF2C',
+    'babypips.com': '#1D70B8',
+    'finance.yahoo.com': '#6001D2'
+};
+
 // Webhook ile gönderim yapacak yardımcı fonksiyon
-async function sendViaWebhook(channel, titleText, itemLink, feedUrl) {
+async function sendViaWebhook(channel, titleText, itemLink, feedUrl, pubDate) {
     try {
         const webhooks = await channel.fetchWebhooks();
         let webhook = webhooks.find(wh => wh.token);
@@ -120,17 +126,29 @@ async function sendViaWebhook(channel, titleText, itemLink, feedUrl) {
         
         let siteName = domainName.split('.')[0];
         siteName = siteName.charAt(0).toUpperCase() + siteName.slice(1);
-        if (feedUrl.includes('bbci')) siteName = 'BBC Türkçe';
+        
+        let embedColor = siteColors[domainName] || '#FFFFFF';
+        if (feedUrl.includes('bbci')) {
+            siteName = 'BBC Türkçe';
+            embedColor = '#B80000';
+        }
 
         // İsim "Kivy" olmadan direkt site adı olacak
         const username = siteName;
         // Avatar bizim dinamik oluşturduğumuz yarı yarıya resim olacak
         const avatarURL = `${APP_URL}/avatar/${domainName}`;
 
+        const embed = new EmbedBuilder()
+            .setTitle(titleText)
+            .setURL(itemLink)
+            .setColor(embedColor)
+            .setFooter({ text: 'kivy' })
+            .setTimestamp(pubDate ? new Date(pubDate) : new Date());
+
         await webhook.send({
-            content: `🗞️ **${titleText}**\n${itemLink}`,
             username: username,
-            avatarURL: avatarURL
+            avatarURL: avatarURL,
+            embeds: [embed]
         });
     } catch (error) {
         console.error('Webhook hatası:', error.message);
@@ -157,7 +175,7 @@ client.on('messageCreate', async message => {
                         } catch (e) {}
                     }
 
-                    await sendViaWebhook(message.channel, translatedTitle, item.link, feedUrl);
+                    await sendViaWebhook(message.channel, translatedTitle, item.link, feedUrl, item.pubDate);
                 }
             }
         } catch (error) {
@@ -193,7 +211,7 @@ async function checkAllNews() {
                         }
                     }
 
-                    await sendViaWebhook(channel, titleText, item.link, feedUrl);
+                    await sendViaWebhook(channel, titleText, item.link, feedUrl, item.pubDate);
                 }
             }
         }

@@ -79,7 +79,7 @@ client.on('messageCreate', async message => {
                     }
 
                     const domainName = new URL(item.link).hostname.replace(/^www\./, '');
-                    await message.channel.send(`🗞️ ${translatedTitle} - ${domainName}\n${item.link}`);
+                    await message.channel.send(`🗞️ **${translatedTitle}** - ${domainName}\n${item.link}`);
                 }
             }
         } catch (error) {
@@ -118,7 +118,7 @@ async function checkAllNews() {
                     }
 
                     const domainName = new URL(item.link).hostname.replace(/^www\./, '');
-                    await channel.send(`🗞️ ${titleText} - ${domainName}\n${item.link}`);
+                    await channel.send(`🗞️ **${titleText}** - ${domainName}\n${item.link}`);
                 }
             }
         }

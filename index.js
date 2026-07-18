@@ -58,6 +58,39 @@ client.once('ready', async () => {
     }
 });
 
+// Webhook ile gönderim yapacak yardımcı fonksiyon
+async function sendViaWebhook(channel, titleText, itemLink, feedUrl) {
+    try {
+        const webhooks = await channel.fetchWebhooks();
+        let webhook = webhooks.find(wh => wh.token);
+
+        // Eğer kanalda webhook yoksa oluştur
+        if (!webhook) {
+            webhook = await channel.createWebhook({
+                name: 'Kivy News',
+            });
+        }
+
+        const urlObj = new URL(itemLink);
+        let domainName = urlObj.hostname.replace(/^www\./, '');
+        
+        // Sitenin baş harfini büyük yap (Örn: cointelegraph -> Cointelegraph)
+        let siteName = domainName.split('.')[0];
+        siteName = siteName.charAt(0).toUpperCase() + siteName.slice(1);
+        if (feedUrl.includes('bbci')) siteName = 'BBC Türkçe';
+
+        await webhook.send({
+            content: `🗞️ **${titleText}**\n${itemLink}`,
+            username: `kivy - ${siteName}`,
+            avatarURL: `https://www.google.com/s2/favicons?domain=${domainName}&sz=128`
+        });
+    } catch (error) {
+        console.error('Webhook hatası (Yetki eksik olabilir), normal atılıyor:', error.message);
+        // Yetki yoksa eski sistem normal mesaj atsın
+        await channel.send(`🗞️ **${titleText}** - ${new URL(itemLink).hostname.replace(/^www\./, '')}\n${itemLink}`);
+    }
+}
+
 // !test Komutu
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
@@ -78,8 +111,7 @@ client.on('messageCreate', async message => {
                         } catch (e) {}
                     }
 
-                    const domainName = new URL(item.link).hostname.replace(/^www\./, '');
-                    await message.channel.send(`🗞️ **${translatedTitle}** - ${domainName}\n${item.link}`);
+                    await sendViaWebhook(message.channel, translatedTitle, item.link, feedUrl);
                 }
             }
         } catch (error) {
@@ -117,8 +149,7 @@ async function checkAllNews() {
                         }
                     }
 
-                    const domainName = new URL(item.link).hostname.replace(/^www\./, '');
-                    await channel.send(`🗞️ **${titleText}** - ${domainName}\n${item.link}`);
+                    await sendViaWebhook(channel, titleText, item.link, feedUrl);
                 }
             }
         }

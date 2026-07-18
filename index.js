@@ -1,11 +1,8 @@
 const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
 const express = require('express');
 const Parser = require('rss-parser'); 
-const translate = require('translate-google'); // Çeviri eklentisi
-
-const app = express();
-app.get('/', (req, res) => res.send('Bot başarıyla çalışıyor ve 7/24 uyanık!'));
-app.listen(process.env.PORT || 3000, () => console.log('Web sunucusu başlatıldı.'));
+const translate = require('translate-google'); 
+const Jimp = require('jimp'); 
 
 // --- BOT AYARLARI ---
 const TOKEN = process.env.TOKEN;
@@ -13,6 +10,7 @@ const GUILD_ID = process.env.GUILD_ID;
 const TOTAL_CHANNEL_ID = process.env.TOTAL_CHANNEL_ID;
 const ACTIVE_CHANNEL_ID = process.env.ACTIVE_CHANNEL_ID;
 const NEWS_CHANNEL_ID = process.env.NEWS_CHANNEL_ID || '1339630784738234442';
+const APP_URL = process.env.APP_URL || 'https://uye-sayisi-botu.onrender.com';
 
 const client = new Client({
     intents: [
@@ -24,9 +22,57 @@ const client = new Client({
     ]
 });
 
+// --- YARI YARIYA AVATAR SİSTEMİ (Express Web Sunucusu) ---
+const app = express();
+const avatarCache = {}; 
+
+app.get('/', (req, res) => res.send('Bot başarıyla çalışıyor ve 7/24 uyanık!'));
+
+app.get('/avatar/:domain', async (req, res) => {
+    const domain = req.params.domain;
+    
+    // Daha önce oluşturduysak hafızadan ver (Sistemi yormamak için)
+    if (avatarCache[domain]) {
+        res.setHeader('Content-Type', 'image/png');
+        return res.send(avatarCache[domain]);
+    }
+
+    try {
+        const botAvatarUrl = client.user.displayAvatarURL({ extension: 'png', size: 128 });
+        const siteLogoUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+
+        const botImg = await Jimp.read(botAvatarUrl);
+        const siteImg = await Jimp.read(siteLogoUrl);
+
+        botImg.resize(128, 128);
+        siteImg.resize(128, 128);
+
+        const outImg = new Jimp(128, 128);
+        
+        // Sol yarıya botun resmini koy
+        botImg.crop(0, 0, 64, 128);
+        outImg.composite(botImg, 0, 0);
+
+        // Sağ yarıya sitenin logosunu koy
+        siteImg.crop(64, 0, 64, 128);
+        outImg.composite(siteImg, 64, 0);
+
+        const buffer = await outImg.getBufferAsync(Jimp.MIME_PNG);
+        avatarCache[domain] = buffer; // Hafızaya kaydet
+
+        res.setHeader('Content-Type', 'image/png');
+        res.send(buffer);
+    } catch (e) {
+        console.error("Avatar oluşturulamadı:", e.message);
+        res.status(500).send('Error');
+    }
+});
+
+app.listen(process.env.PORT || 3000, () => console.log('Web sunucusu başlatıldı.'));
+
+
 const parser = new Parser();
 
-// Kaynaklarımız
 const newsSources = [
     'https://cointelegraph.com/rss',
     'https://babypips.com/feed.rss',
@@ -34,7 +80,6 @@ const newsSources = [
     'https://feeds.bbci.co.uk/turkce/rss.xml'
 ];
 
-// Her kaynak için ayrı ayrı son haber tarihini tutalım ki haber atlamasın
 let lastNewsDates = {};
 newsSources.forEach(url => {
     lastNewsDates[url] = Date.now();
@@ -46,7 +91,7 @@ client.once('ready', async () => {
 
     updateChannelNames();
     setInterval(updateChannelNames, 10 * 60 * 1000); 
-    setInterval(checkAllNews, 5 * 60 * 1000); // 5 Dakikada bir tüm kaynakları tara
+    setInterval(checkAllNews, 5 * 60 * 1000); 
 
     try {
         const newsChannel = await client.channels.fetch(NEWS_CHANNEL_ID).catch(() => null);
@@ -64,7 +109,6 @@ async function sendViaWebhook(channel, titleText, itemLink, feedUrl) {
         const webhooks = await channel.fetchWebhooks();
         let webhook = webhooks.find(wh => wh.token);
 
-        // Eğer kanalda webhook yoksa oluştur
         if (!webhook) {
             webhook = await channel.createWebhook({
                 name: 'Kivy News',
@@ -74,24 +118,26 @@ async function sendViaWebhook(channel, titleText, itemLink, feedUrl) {
         const urlObj = new URL(itemLink);
         let domainName = urlObj.hostname.replace(/^www\./, '');
         
-        // Sitenin baş harfini büyük yap (Örn: cointelegraph -> Cointelegraph)
         let siteName = domainName.split('.')[0];
         siteName = siteName.charAt(0).toUpperCase() + siteName.slice(1);
         if (feedUrl.includes('bbci')) siteName = 'BBC Türkçe';
 
+        // İsim "Kivy" olmadan direkt site adı olacak
+        const username = siteName;
+        // Avatar bizim dinamik oluşturduğumuz yarı yarıya resim olacak
+        const avatarURL = `${APP_URL}/avatar/${domainName}`;
+
         await webhook.send({
             content: `🗞️ **${titleText}**\n${itemLink}`,
-            username: `kivy - ${siteName}`,
-            avatarURL: `https://www.google.com/s2/favicons?domain=${domainName}&sz=128`
+            username: username,
+            avatarURL: avatarURL
         });
     } catch (error) {
-        console.error('Webhook hatası (Yetki eksik olabilir), normal atılıyor:', error.message);
-        // Yetki yoksa eski sistem normal mesaj atsın
+        console.error('Webhook hatası:', error.message);
         await channel.send(`🗞️ **${titleText}** - ${new URL(itemLink).hostname.replace(/^www\./, '')}\n${itemLink}`);
     }
 }
 
-// !test Komutu
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
 
@@ -134,13 +180,11 @@ async function checkAllNews() {
             for (const item of items) {
                 const itemDate = new Date(item.pubDate).getTime();
                 
-                // O sitenin son çekilen haberinden daha yeniyse
                 if (itemDate > lastNewsDates[feedUrl]) {
                     lastNewsDates[feedUrl] = itemDate; 
                     
                     let titleText = item.title;
                     
-                    // Eğer haber BBC Türkçe'den değilse İngilizceden Türkçeye çevir
                     if (!feedUrl.includes('bbci.co.uk')) {
                         try {
                             titleText = await translate(item.title, {to: 'tr'});

@@ -10,6 +10,7 @@ const GUILD_ID = process.env.GUILD_ID;
 const TOTAL_CHANNEL_ID = process.env.TOTAL_CHANNEL_ID;
 const ACTIVE_CHANNEL_ID = process.env.ACTIVE_CHANNEL_ID;
 const NEWS_CHANNEL_ID = process.env.NEWS_CHANNEL_ID || '1339630784738234442';
+const NOTIFICATION_ROLE_ID = process.env.NOTIFICATION_ROLE_ID || '1527985419168387112';
 const APP_URL = process.env.APP_URL || 'https://uye-sayisi-botu.onrender.com';
 
 const client = new Client({
@@ -182,6 +183,7 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
         }
 
         await webhook.send({
+            content: `<@&${NOTIFICATION_ROLE_ID}>`,
             username: username,
             avatarURL: avatarURL,
             embeds: [embed]

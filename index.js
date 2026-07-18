@@ -128,6 +128,14 @@ client.once('ready', async () => {
     }
 });
 
+const siteColors = {
+    'cointelegraph.com': '#FABF2C',
+    'babypips.com': '#1D70B8',
+    'finance.yahoo.com': '#6001D2',
+    'bbc.com': '#B80000',
+    'bbc.co.uk': '#B80000'
+};
+
 // Webhook ile gönderim yapacak yardımcı fonksiyon
 async function sendViaWebhook(channel, titleText, item, feedUrl) {
     try {
@@ -149,8 +157,11 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
         let siteName = domainName.split('.')[0];
         siteName = siteName.charAt(0).toUpperCase() + siteName.slice(1);
         
+        let embedColor = siteColors[domainName] || '#2ECC71';
+
         if (feedUrl.includes('bbci')) {
             siteName = 'BBC Türkçe';
+            embedColor = '#B80000';
         }
 
         // İsim "Kivy" olmadan direkt site adı olacak
@@ -173,7 +184,7 @@ async function sendViaWebhook(channel, titleText, item, feedUrl) {
         const embed = new EmbedBuilder()
             .setTitle(`**${domainName}**`)
             .setDescription(`[**${titleText}**](${itemLink})`)
-            .setColor('#2ECC71') // Kivy yeşil rengi
+            .setColor(embedColor)
             .setFooter({ text: 'kivy', iconURL: client.user.displayAvatarURL() })
             .setTimestamp(pubDate ? new Date(pubDate) : new Date());
 

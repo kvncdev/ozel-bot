@@ -1,5 +1,6 @@
 const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
 const express = require('express');
+const Parser = require('rss-parser'); // Haber çekmek için eklenti
 
 // --- 7/24 AÇIK TUTMAK İÇİN WEB SUNUCUSU (UptimeRobot vs. için) ---
 const app = express();
@@ -12,6 +13,7 @@ const TOKEN = process.env.TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
 const TOTAL_CHANNEL_ID = process.env.TOTAL_CHANNEL_ID;
 const ACTIVE_CHANNEL_ID = process.env.ACTIVE_CHANNEL_ID;
+const NEWS_CHANNEL_ID = process.env.NEWS_CHANNEL_ID || '1339630784738234442'; // Haber kanalı
 // --------------------
 
 const client = new Client({
@@ -22,18 +24,50 @@ const client = new Client({
     ]
 });
 
+const parser = new Parser();
+let lastNewsDate = Date.now(); // Bot çalıştığı andan itibaren olan haberleri çeker (eski haberleri spamlamaz)
+
 client.once('ready', async () => {
     console.log(`${client.user.tag} olarak giriş yapıldı!`);
 
     // Botun "Oynuyor" / "Durum" kısmını ayarla
     client.user.setActivity('A part of kivy.gg', { type: ActivityType.Custom });
 
-    // İlk çalıştığında hemen güncellesin
+    // İlk çalıştığında kanalları güncellesin
     updateChannelNames();
 
-    // Ardından her 10 dakikada bir güncellesin
+    // Ardından her 10 dakikada bir kanalları güncellesin
     setInterval(updateChannelNames, 10 * 60 * 1000); 
+
+    // Haberleri her 5 dakikada bir kontrol et
+    setInterval(checkCryptoNews, 5 * 60 * 1000);
 });
+
+async function checkCryptoNews() {
+    try {
+        const channel = await client.channels.fetch(NEWS_CHANNEL_ID).catch(() => null);
+        if (!channel) return;
+
+        // Kripto haberlerinin ana merkezi olan Cointelegraph'tan çekiyoruz
+        const feed = await parser.parseURL('https://cointelegraph.com/rss');
+        
+        // Haberleri eskiden yeniye doğru sırala (Önce eski haber düşsün)
+        const items = feed.items.reverse();
+
+        for (const item of items) {
+            const itemDate = new Date(item.pubDate).getTime();
+            
+            // Eğer haber botun hafızasındaki son haber tarihinden yeniyse paylaş
+            if (itemDate > lastNewsDate) {
+                lastNewsDate = itemDate; // Son haber tarihini güncelle
+                
+                await channel.send(`📰 **${item.title}**\n${item.link}`);
+            }
+        }
+    } catch (error) {
+        console.error('Haber çekilirken hata oluştu:', error.message);
+    }
+}
 
 async function updateChannelNames() {
     // Eksik ayar varsa işlemi durdur ve uyar
@@ -74,7 +108,7 @@ async function updateChannelNames() {
             
             const newActiveName = `🟢 Aktif Üye: ${activeCount}`;
             if (activeChannel.name !== newActiveName) {
-                await activeChannel.edit({ name: newActiveName }).catch(console.error);
+                await activeChannel.edit({ name: newActiveName });
                 console.log(`Kanal güncellendi: ${newActiveName}`);
             }
         }
